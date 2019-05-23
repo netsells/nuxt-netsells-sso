@@ -1,0 +1,10 @@
+{
+  "name": "nuxt-netsells-sso",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Becca Anderton",
+  "license": "MIT",
+  "dependencies": {
+    "@nuxtjs/axios": "^5.5.1"
+  }
+}
