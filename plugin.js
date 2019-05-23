@@ -1,5 +1,8 @@
 const cookie = require('cookie-universal');
-const axios = require('./axios');
+const axios = require('axios');
+
+let defaultAxios;
+let cookieParser;
 
 /**
  * Register our store module
@@ -41,13 +44,13 @@ function registerStoreModule(store) {
             /**
              * Get the user SSO token
              * @param {*} context
-             * @param {String} redirect_url
+             * @param {String} url
              * @return {*}
              */
-            getSsoToken(context, redirect_url) {
-                return this.$axios.get('token', {
+            async getSsoToken(context, url) {
+                return await defaultAxios.get('token', {
                     params: {
-                        redirect_url,
+                        redirect_url: encodeURIComponent(url),
                     },
                 });
             },
@@ -58,39 +61,12 @@ function registerStoreModule(store) {
              * @param {string} token
              * @return {*}
              */
-            getAccessToken(context, token) {
-                return this.$axios.get('token', {
+            async getAccessToken(context, token) {
+                return await defaultAxios.get('token', {
                     params: {
                         sso_token: token,
                     },
                 });
-            },
-
-            /**
-             * Log user into the platform
-             * @param {object} state
-             * @param {*} dispatch
-             */
-            loginUser({ state, dispatch }) {
-                const storedToken = localStorage.getItem('auth._token.local');
-
-                if (state.logged_in) {
-                    return;
-                }
-
-                if (storedToken) {
-                    // @todo;
-                }
-
-                state.loading = true;
-                dispatch('checkToken');
-            },
-
-            /**
-             * Check token
-             */
-            checkToken() {
-                // @todo
             },
         },
 
@@ -112,7 +88,7 @@ function registerStoreModule(store) {
  * @return {*}
  */
 async function getSso({ store, redirect, route }) {
-    const { data } = await store.dispatch('auth/getSsoToken', encodeURIComponent(`${ process.env.APP_URL }${ route.fullPath }`));
+    const { data } = await store.dispatch('auth/getSsoToken', `${ process.env.APP_URL }${ route.fullPath }`);
 
     redirect(data.redirect_url);
 }
@@ -124,16 +100,18 @@ async function getSso({ store, redirect, route }) {
  * @param {object} route
  * @return {*}
  */
-async function getUser(store, redirect, route) {
-    try {
-        const { data } = await store.dispatch('auth/getUser');
+async function getUser({ store, redirect, route }) {
+    const { data } = await store.dispatch('auth/getUser');
 
-        await store.commit('auth/setUser', data.data);
-    } catch ({ response }) {
-        if (response.status === 401) {
-            await getSso({ store, redirect, route });
-        }
-    }
+    await store.commit('auth/setUser', data.data);
+}
+
+function getTokenCookie() {
+    return cookieParser.get('auth._token.local');
+}
+
+function setTokenCookie(token) {
+    cookieParser.set('auth._token.local', token);
 }
 
 /**
@@ -144,15 +122,14 @@ async function getUser(store, redirect, route) {
  * @return {string}
  */
 async function getAccessToken({ req, res, app, store, route }) {
-    let cookieParser = cookie(req, res);
-    let token = cookieParser.get('auth._token.local');
+    let token = getTokenCookie('auth._token.local');
 
-    if (!token && route.query.sso_token) {
+    if (!token) {
         const { data } = await store.dispatch('auth/getAccessToken', route.query.sso_token);
 
         token = data.token;
 
-        cookieParser.set('auth._token.local', token);
+        setTokenCookie(token);
     }
 
     return token;
@@ -168,36 +145,32 @@ async function getAccessToken({ req, res, app, store, route }) {
  * @param {*} inject
  * @return {Promise<void>}
  */
-export default async function(ctx, inject) {
-    const { req, res, app, store, route, redirect, error } = ctx;
+export default async function({ req, res, app, store, route, redirect, error }, inject) {
+    cookieParser = cookie(req, res);
+
+    let accessToken;
+    defaultAxios = axios.create({
+        baseURL: process.env.API_BASE,
+    });
 
     registerStoreModule(store);
 
-    const token = await getAccessToken({ req, res, app, store, route });
+    if (!getTokenCookie()) {
+        if (!route.query.sso_token) {
+            await getSso({store, redirect, route});
+            return;
+        }
 
-    try {
-        // console.log(axios);
-        ctx.app.$axios.setToken(token, 'Bearer');
-        await getUser(store, redirect, route);
-
-        inject('sso', {
-            loggedIn: store.getters['auth/loggedIn'],
-        });
-
-        redirect(route.path);
-    } catch (message) {
-        console.log('1', message)
-        error({ message });
+        accessToken = await getAccessToken({req, res, app, store, route});
     }
 
-    if (getAccessToken({ req, res, app, store, route })) {
-        return;
-    }
+    app.$axios.setToken(accessToken || getTokenCookie(), 'Bearer');
 
-    try {
-        await getSso({ store, redirect, route });
-    } catch (message) {
-        console.log('1', message)
-        error({ message });
-    }
+    await getUser({ store, redirect, route });
+
+    inject('sso', {
+        loggedIn: store.getters['auth/loggedIn'],
+    });
+
+    redirect(route.path);
 }
