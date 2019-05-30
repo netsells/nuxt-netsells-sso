@@ -71,10 +71,20 @@ function registerStoreModule(store) {
         },
 
         getters: {
+            /**
+             * Get user permissions to set in the state
+             * @param {object} state
+             * @return {*}
+             */
             getUserPermissions: (state) => state.user.permissions
                 ? (state.user.permissions || { data: {} }).data.projects
                 : null,
 
+            /**
+             * If we have a user id we can set the loggedIn state to be true
+             * @param {object} state
+             * @return {number | string}
+             */
             loggedIn: (state) => state.user.id,
         },
     }, { preserveState: process.browser });

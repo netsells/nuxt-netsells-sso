@@ -1,5 +1,9 @@
 const path = require('path');
 
+/**
+ * Module registration function
+ * @param {object} moduleOptions
+ */
 module.exports = function SsoModule (moduleOptions) {
     const { dst } = this.addTemplate({
         src: path.resolve(__dirname, 'plugin.js'),
@@ -9,4 +13,4 @@ module.exports = function SsoModule (moduleOptions) {
     });
 
     this.options.plugins.push(path.resolve(this.options.buildDir, dst))
-}
+};
