@@ -22,7 +22,9 @@ Add the module to your nuxt config's `modules` array:
 module.exports = {
     ...
     modules: [
-        '@netsells/nuxt-netsells-sso',
+        ['@netsells/nuxt-netsells-sso', {
+            sso_url: 'https://sso.netsells.tools',
+        }],
     ],
     ...
 };
