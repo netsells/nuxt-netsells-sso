@@ -8,7 +8,9 @@ module.exports = function SsoModule (moduleOptions) {
     const { dst } = this.addTemplate({
         src: path.resolve(__dirname, 'plugin.js'),
         options: {
-            sso_url: moduleOptions.sso_url,
+            endpoints: {
+                me: moduleOptions.endpoints.me,
+            },
         },
     });
 

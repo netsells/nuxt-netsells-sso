@@ -38,7 +38,7 @@ function registerStoreModule(store) {
              * @returns {*}
              */
             getUser() {
-                return this.$axios.get('api/me');
+                return this.$axios.get('<%- options.endpoints.me %>');
             },
 
             /**

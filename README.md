@@ -23,7 +23,9 @@ module.exports = {
     ...
     modules: [
         ['@netsells/nuxt-netsells-sso', {
-            sso_url: 'https://sso.netsells.tools',
+            endpoints: {
+                me: 'api/me',
+            },
         }],
     ],
     ...
