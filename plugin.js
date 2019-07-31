@@ -6,13 +6,14 @@ let cookieParser;
 
 /**
  * Register our store module
+ *
  * @param {*} store
  */
 function registerStoreModule(store) {
     store.registerModule('auth', {
         namespaced: true,
 
-        state: ()  => ({
+        state: () => ({
             user: {
                 permissions: {},
             },
@@ -23,6 +24,7 @@ function registerStoreModule(store) {
         mutations: {
             /**
              * Set user details within the state.
+             *
              * @param {object} state
              * @param {object} val
              */
@@ -35,6 +37,7 @@ function registerStoreModule(store) {
         actions: {
             /**
              * Get the user information
+             *
              * @returns {*}
              */
             getUser() {
@@ -43,8 +46,10 @@ function registerStoreModule(store) {
 
             /**
              * Get the user SSO token
+             *
              * @param {*} context
              * @param {String} url
+             *
              * @return {*}
              */
             async getSsoToken(context, url) {
@@ -57,8 +62,10 @@ function registerStoreModule(store) {
 
             /**
              * Get the user access token for future requests
+             *
              * @param {*} context
              * @param {string} token
+             *
              * @return {*}
              */
             async getAccessToken(context, token) {
@@ -73,7 +80,9 @@ function registerStoreModule(store) {
         getters: {
             /**
              * Get user permissions to set in the state
+             *
              * @param {object} state
+             *
              * @return {*}
              */
             getUserPermissions: (state) => state.user.permissions
@@ -82,7 +91,9 @@ function registerStoreModule(store) {
 
             /**
              * If we have a user id we can set the loggedIn state to be true
+             *
              * @param {object} state
+             *
              * @return {number | string}
              */
             loggedIn: (state) => state.user.id,
@@ -92,9 +103,11 @@ function registerStoreModule(store) {
 
 /**
  * Get SSO token
+ *
  * @param {object} store
  * @param {function} redirect
  * @param {object} route
+ *
  * @return {*}
  */
 async function getSso({ store, redirect, route }) {
@@ -105,9 +118,11 @@ async function getSso({ store, redirect, route }) {
 
 /**
  * Get the user data from the API
+ *
  * @param {object} store
  * @param {function} redirect
  * @param {object} route
+ *
  * @return {*}
  */
 async function getUser({ store, redirect, route }) {
@@ -116,23 +131,35 @@ async function getUser({ store, redirect, route }) {
     await store.commit('auth/setUser', data.data);
 }
 
+/**
+ * Get the token from the auth cookie
+ *
+ * @returns {String}
+ */
 function getTokenCookie() {
     return cookieParser.get('auth._token.local');
 }
 
+/**
+ * Set the token in the cookies
+ *
+ * @returns {String}
+ */
 function setTokenCookie(token) {
     cookieParser.set('auth._token.local', token);
 }
 
 /**
  * Get access token
+ *
  * @param {object} app
  * @param {object} store
  * @param {object} route
+ *
  * @return {string}
  */
-async function getAccessToken({ req, res, app, store, route }) {
-    let token = getTokenCookie('auth._token.local');
+async function getAccessToken({  app, store, route }) {
+    let token = getTokenCookie();
 
     if (!token) {
         const { data } = await store.dispatch('auth/getAccessToken', route.query.sso_token);
@@ -146,6 +173,20 @@ async function getAccessToken({ req, res, app, store, route }) {
 }
 
 /**
+ * Check if the access token JWT has expired
+ *
+ * @param {String} accessToken
+ *
+ * @returns {Boolean}
+ */
+function tokenHasExpired(accessToken) {
+    const jwtDecode = require('jwt-decode');
+    const jwt = jwtDecode(accessToken);
+
+    return new Date() > new Date(jwt.exp * 1000);
+}
+
+/**
  * The holder function for our plugin;
  * We need to register our auth module (above) within our vuex store
  * Once registered check if our token already exists - if it does return early.
@@ -153,6 +194,7 @@ async function getAccessToken({ req, res, app, store, route }) {
  *
  * @param {*} context
  * @param {*} inject
+ *
  * @return {Promise<void>}
  */
 export default async function({ req, res, app, store, route, redirect, error }, inject) {
@@ -165,13 +207,16 @@ export default async function({ req, res, app, store, route, redirect, error }, 
 
     registerStoreModule(store);
 
-    if (!getTokenCookie()) {
+    if (!getTokenCookie() || tokenHasExpired(getTokenCookie())) {
+        // Reset the cookie here to invalidate it
+        setTokenCookie('');
+
         if (!route.query.sso_token) {
             await getSso({store, redirect, route});
             return;
         }
 
-        accessToken = await getAccessToken({req, res, app, store, route});
+        accessToken = await getAccessToken({ req, res, app, store, route });
     }
 
     app.$axios.setToken(accessToken || getTokenCookie(), 'Bearer');
