@@ -41,7 +41,20 @@ function registerStoreModule(store) {
              * @returns {*}
              */
             getUser() {
-                return this.$axios.get('<%- options.endpoints.me %>');
+                return this.$axios.get('<%- options.endpoints.me %>')
+                .catch(function (error) {
+                    console.info('Failed getting the logged in user.');
+
+                    if (error.response.status == 401) {
+                        console.info('Looks like the token used was invalid (401): ');
+                    } else {
+                        console.info(`Received a ${error.response.status} response!`);
+                    }
+
+                    console.debug(error.response.data);
+
+                    throw error;
+                });
             },
 
             /**
@@ -57,6 +70,12 @@ function registerStoreModule(store) {
                     params: {
                         redirect_url: encodeURIComponent(url),
                     },
+                })
+                .catch(function (error) {
+                    console.info(`Received a ${error.response.status} response while fetching the SSO token!`);
+                    console.debug(error.response.data);
+
+                    throw error;
                 });
             },
 
@@ -73,6 +92,12 @@ function registerStoreModule(store) {
                     params: {
                         sso_token: token,
                     },
+                })
+                .catch(function (error) {
+                    console.info(`Received a ${error.response.status} response while fetching the access token from ${error.request.path}!`);
+                    console.debug(error.response.data);
+
+                    throw error;
                 });
             },
         },
@@ -219,7 +244,16 @@ export default async function({ req, res, app, store, route, redirect, error }, 
         accessToken = await getAccessToken({ req, res, app, store, route });
     }
 
+    if (accessToken) {
+        console.info("Setting the access token from the SSO response.");
+    } else {
+        console.info("Setting the access token from a cookie (previously fetched).");
+    }
+
     app.$axios.setToken(accessToken || getTokenCookie(), 'Bearer');
+
+    // We don't log the token for security reasons
+    console.debug(`Using token with length: ${(accessToken || getTokenCookie()).length}`);
 
     await getUser({ store, redirect, route });
 
