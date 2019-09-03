@@ -46,7 +46,7 @@ function registerStoreModule(store) {
                     console.info('Failed getting the logged in user.');
 
                     if (error.response.status == 401) {
-                        console.info('Looks like the token used was invalid (401): ');
+                        console.info('Looks like the token used was invalid (401).');
                     } else {
                         console.info(`Received a ${error.response.status} response!`);
                     }
