@@ -6,6 +6,7 @@
   "license": "MIT",
   "dependencies": {
     "@nuxtjs/axios": "^5.5.1",
+    "axios-auth-refresh": "^1.0.7",
     "cookie-universal": "^2.0.14",
     "jwt-decode": "^2.2.0"
   }

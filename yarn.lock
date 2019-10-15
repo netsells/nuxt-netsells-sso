@@ -46,6 +46,13 @@ atob@^2.1.1:
   version "2.1.2"
   resolved "https://registry.yarnpkg.com/atob/-/atob-2.1.2.tgz#6d9517eb9e030d2436666651e86bd9f6f13533c9"
 
+axios-auth-refresh@^1.0.7:
+  version "1.0.7"
+  resolved "https://registry.yarnpkg.com/axios-auth-refresh/-/axios-auth-refresh-1.0.7.tgz#b9f39131ef39190c753d386746e9aa6e7114212b"
+  integrity sha512-TQl1tF+MY+iDG93WpiqcnwGb1lvdJLKzi0IN/7hBkYFlpOC6xv4S+cW3QHZOBjKpFWRWqHg9fXd/PDsCvJ3uLA==
+  dependencies:
+    axios "^0.18.0"
+
 axios-retry@^3.1.2:
   version "3.1.2"
   resolved "https://registry.yarnpkg.com/axios-retry/-/axios-retry-3.1.2.tgz#4f4dcbefb0b434e22b72bd5e28a027d77b8a3458"
