@@ -6,7 +6,7 @@
 
 ## Why?
 
-Currently for all Netsells internal tooling we would have to repeat the Single Sign On process for every tool. This allows us a centralised way of handling it across all tools, and ensure they all work in the same manner. Simplifies the process of anyone who wisehes to build an internal tool.
+Currently for all Netsells internal tooling we would have to repeat the Single Sign On process for every tool. This allows us a centralised way of handling it across all tools, and ensure they all work in the same manner. Simplifies the process of anyone who wishes to build an internal tool.
 
 ## Installation
 
@@ -23,14 +23,17 @@ module.exports = {
     ...
     modules: [
         ['@netsells/nuxt-netsells-sso', {
+            debug: false, // Enable logging
             endpoints: {
-                me: 'api/me',
+                me: 'api/me', // User lookup endpoint
             },
         }],
     ],
     ...
 };
 ```
+
+API requests use the `API_BASE` env value to determine the location of the API to handle the SSO authentication.
 
 MIT © [Netsells](https://www.netsells.co.uk)
 
