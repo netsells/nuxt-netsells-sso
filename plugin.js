@@ -1,8 +1,36 @@
 const cookie = require('cookie-universal');
 const axios = require('axios');
+const jwtDecode = require('jwt-decode');
+const { default: createAuthRefreshInterceptor } = require('axios-auth-refresh');
 
-let defaultAxios;
+const COOKIE_NAME = 'auth._token.local';
+
+const ssoAxios = axios.create({
+    baseURL: process.env.API_BASE,
+});
+
+const defaultOptions = {
+    debug: process.env.NODE_ENV !== 'production',
+    endpoints: {
+        me: 'me',
+    },
+};
+
+const options = Object.assign(defaultOptions, JSON.parse('<%= JSON.stringify(options) %>'));
+
 let cookieParser;
+
+/**
+ * Logging wrapper based on debug mode
+ *
+ * @param {String} message
+ * @param {String} type
+ */
+function logger(message, type = 'log') {
+    if (options.debug) {
+        console[type](message);
+    }
+}
 
 /**
  * Register our store module
@@ -40,21 +68,22 @@ function registerStoreModule(store) {
              *
              * @returns {*}
              */
-            getUser() {
-                return this.$axios.get('<%- options.endpoints.me %>')
-                .catch(function (error) {
-                    console.info('Failed getting the logged in user.');
+            async getUser() {
+                try {
+                    return await this.$axios.$get('<%- options.endpoints.me %>');
+                } catch (error) {
+                    logger('Failed getting the logged in user.', 'info');
 
-                    if (error.response.status == 401) {
-                        console.info('Looks like the token used was invalid (401).');
+                    if (error.response.status === 401) {
+                        logger('Looks like the token used was invalid (401).', 'info');
                     } else {
-                        console.info(`Received a ${error.response.status} response!`);
+                        logger(`Received a ${ error.response.status } response!`, 'info');
                     }
 
-                    console.debug(error.response.data);
+                    logger(error.response.data, 'debug');
 
                     throw error;
-                });
+                }
             },
 
             /**
@@ -66,17 +95,18 @@ function registerStoreModule(store) {
              * @return {*}
              */
             async getSsoToken(context, url) {
-                return await defaultAxios.get('token', {
-                    params: {
-                        redirect_url: encodeURIComponent(url),
-                    },
-                })
-                .catch(function (error) {
-                    console.info(`Received a ${error.response.status} response while fetching the SSO token!`);
-                    console.debug(error.response.data);
+                try {
+                    return await ssoAxios.get('token', {
+                        params: {
+                            redirect_url: encodeURIComponent(url),
+                        },
+                    });
+                } catch (error) {
+                    logger(`Received a ${ error.response.status } response while fetching the SSO token!`, 'info');
+                    logger(error.response.data, 'debug');
 
                     throw error;
-                });
+                }
             },
 
             /**
@@ -88,17 +118,18 @@ function registerStoreModule(store) {
              * @return {*}
              */
             async getAccessToken(context, token) {
-                return await defaultAxios.get('token', {
-                    params: {
-                        sso_token: token,
-                    },
-                })
-                .catch(function (error) {
-                    console.info(`Received a ${error.response.status} response while fetching the access token from ${error.request.path}!`);
-                    console.debug(error.response.data);
+                try {
+                    return await ssoAxios.get('token', {
+                        params: {
+                            sso_token: token,
+                        },
+                    });
+                } catch (error) {
+                    logger(`Received a ${ error.response.status } response while fetching the access token from ${ error.request.path }!`, 'info');
+                    logger(error.response.data, 'debug');
 
                     throw error;
-                });
+                }
             },
         },
 
@@ -119,9 +150,9 @@ function registerStoreModule(store) {
              *
              * @param {object} state
              *
-             * @return {number | string}
+             * @return {Boolean}
              */
-            loggedIn: (state) => state.user.id,
+            loggedIn: (state) => Boolean(state.user.id),
         },
     }, { preserveState: process.browser });
 }
@@ -153,7 +184,7 @@ async function getSso({ store, redirect, route }) {
 async function getUser({ store, redirect, route }) {
     const { data } = await store.dispatch('auth/getUser');
 
-    await store.commit('auth/setUser', data.data);
+    await store.commit('auth/setUser', data);
 }
 
 /**
@@ -162,7 +193,7 @@ async function getUser({ store, redirect, route }) {
  * @returns {String}
  */
 function getTokenCookie() {
-    return cookieParser.get('auth._token.local');
+    return cookieParser.get(COOKIE_NAME);
 }
 
 /**
@@ -171,7 +202,7 @@ function getTokenCookie() {
  * @returns {String}
  */
 function setTokenCookie(token) {
-    cookieParser.set('auth._token.local', token);
+    cookieParser.set(COOKIE_NAME, token);
 }
 
 /**
@@ -198,6 +229,19 @@ async function getAccessToken({  app, store, route }) {
 }
 
 /**
+ * Get the expiry date from the JWT
+ *
+ * @param {String} accessToken
+ *
+ * @returns {Date}
+ */
+function getTokenExpiry(accessToken) {
+    const jwt = jwtDecode(accessToken);
+
+    return new Date(jwt.exp * 1000);
+}
+
+/**
  * Check if the access token JWT has expired
  *
  * @param {String} accessToken
@@ -205,10 +249,7 @@ async function getAccessToken({  app, store, route }) {
  * @returns {Boolean}
  */
 function tokenHasExpired(accessToken) {
-    const jwtDecode = require('jwt-decode');
-    const jwt = jwtDecode(accessToken);
-
-    return new Date() > new Date(jwt.exp * 1000);
+    return new Date() > getTokenExpiry(accessToken);
 }
 
 /**
@@ -222,13 +263,10 @@ function tokenHasExpired(accessToken) {
  *
  * @return {Promise<void>}
  */
-export default async function({ req, res, app, store, route, redirect, error }, inject) {
+export default async function({ req, res, app, store, route, redirect, error, $axios }, inject) {
     cookieParser = cookie(req, res);
 
     let accessToken;
-    defaultAxios = axios.create({
-        baseURL: process.env.API_BASE,
-    });
 
     registerStoreModule(store);
 
@@ -237,7 +275,7 @@ export default async function({ req, res, app, store, route, redirect, error }, 
         setTokenCookie('');
 
         if (!route.query.sso_token) {
-            await getSso({store, redirect, route});
+            await getSso({ store, redirect, route });
             return;
         }
 
@@ -245,20 +283,40 @@ export default async function({ req, res, app, store, route, redirect, error }, 
     }
 
     if (accessToken) {
-        console.info("Setting the access token from the SSO response.");
+        logger('Setting the access token from the SSO response.', 'info');
     } else {
-        console.info("Setting the access token from a cookie (previously fetched).");
+        logger('Setting the access token from a cookie (previously fetched).', 'info');
     }
+
+    logger(`Token expires at: ${ getTokenExpiry(accessToken || getTokenCookie()) }`);
 
     app.$axios.setToken(accessToken || getTokenCookie(), 'Bearer');
 
     // We don't log the token for security reasons
-    console.debug(`Using token with length: ${(accessToken || getTokenCookie()).length}`);
+    logger(`Using token with length: ${ (accessToken || getTokenCookie()).length }`, 'debug');
 
+    // Fetch the users data
     await getUser({ store, redirect, route });
 
+    // Add globally accessible data into the instance
     inject('sso', {
         loggedIn: store.getters['auth/loggedIn'],
+    });
+
+    // Add the interceptor for fetching the refresh token
+    // when a 401 error is returned
+    createAuthRefreshInterceptor($axios, async ({ response }) => {
+        // Only fetch if it's a 401 to our SSO endpoint and not the original token endpoint
+        if (response.config.url.startsWith(process.env.API_BASE) && !response.config.url.endsWith('/token')) {
+            const { token } = await $axios.$get(`${ process.env.API_BASE }/token/refresh`);
+
+            app.$cookies.set('auth._token.local', token);
+            app.$axios.setToken(token, 'Bearer');
+
+            response.config.headers['Authorization'] = `Bearer ${ token }`;
+        }
+
+        return Promise.resolve();
     });
 
     redirect(route.path);
